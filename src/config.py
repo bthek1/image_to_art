@@ -15,9 +15,9 @@ TEXTURE_HEIGHT: int = 480
 CAMERA_INDEX: int = 0
 
 # Window configurations
-DEFAULT_WINDOW_WIDTH: int = 1300
+DEFAULT_WINDOW_WIDTH: int = 1500  # Increased for side-by-side images
 DEFAULT_WINDOW_HEIGHT: int = 850
-MIN_WINDOW_WIDTH: int = 800
+MIN_WINDOW_WIDTH: int = 1200  # Increased minimum width for two images
 MIN_WINDOW_HEIGHT: int = 600
 
 # UI configurations

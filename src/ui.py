@@ -26,7 +26,7 @@ class UI:
         self._create_main_window()
     
     def _setup_texture(self) -> None:
-        """Set up the texture for image display."""
+        """Set up the textures for image display."""
         # Create a fixed-size texture with placeholder data
         default_data = np.ones((TEXTURE_HEIGHT, TEXTURE_WIDTH, 4), dtype=np.float32) * 0.5
         
@@ -35,7 +35,13 @@ class UI:
                 width=TEXTURE_WIDTH,
                 height=TEXTURE_HEIGHT,
                 default_value=default_data.flatten(),
-                tag="texture_id"
+                tag="original_texture_id"
+            )
+            dpg.add_dynamic_texture(
+                width=TEXTURE_WIDTH,
+                height=TEXTURE_HEIGHT,
+                default_value=default_data.flatten(),
+                tag="styled_texture_id"
             )
     
     def _create_viewport(self) -> None:
@@ -71,36 +77,53 @@ class UI:
             dpg.add_button(label="Snapshot", callback=self._on_snapshot_click)
             dpg.add_separator()
             
-            # Get initial display size
+            # Get initial display size for side-by-side images
             display_width, display_height = self._get_image_display_size()
             
-            # Add image display
-            dpg.add_image(
-                "texture_id",
-                width=display_width,
-                height=display_height,
-                tag="image_display"
-            )
+            # Create horizontal group for side-by-side images
+            with dpg.group(horizontal=True):
+                with dpg.group():
+                    dpg.add_text("Original", color=(255, 255, 255))
+                    dpg.add_image(
+                        "original_texture_id",
+                        width=display_width,
+                        height=display_height,
+                        tag="original_image_display"
+                    )
+                
+                dpg.add_spacer(width=10)
+                
+                with dpg.group():
+                    dpg.add_text("Styled", color=(255, 255, 255))
+                    dpg.add_image(
+                        "styled_texture_id",
+                        width=display_width,
+                        height=display_height,
+                        tag="styled_image_display"
+                    )
         
         # Set as primary window
         dpg.set_primary_window("main_window", True)
     
     def _get_image_display_size(self) -> Tuple[int, int]:
-        """Calculate the image display size based on current window size.
+        """Calculate the image display size based on current window size for side-by-side images.
         
         Returns:
-            Tuple of (width, height) for image display
+            Tuple of (width, height) for each image display
         """
         try:
             if dpg.does_item_exist("main_window"):
                 window_width = dpg.get_item_width("main_window")
                 window_height = dpg.get_item_height("main_window")
                 
-                # Reserve space for controls
-                available_width = max(320, window_width - PADDING)
-                available_height = max(240, window_height - CONTROL_HEIGHT - PADDING)
+                # Reserve space for controls and account for two images side by side
+                # Include space for the spacer between images (10px) and text labels
+                spacer_width = 10
+                text_height = 20  # Approximate height for text labels
+                available_width = max(640, window_width - PADDING - spacer_width) // 2
+                available_height = max(240, window_height - CONTROL_HEIGHT - PADDING - text_height)
                 
-                # Maintain aspect ratio
+                # Maintain aspect ratio for each image
                 if available_width / available_height > ASPECT_RATIO:
                     # Height is limiting factor
                     display_height = available_height
@@ -114,7 +137,8 @@ class UI:
         except Exception:
             pass
         
-        return TEXTURE_WIDTH, TEXTURE_HEIGHT
+        # Default size for each image (half width for side-by-side)
+        return TEXTURE_WIDTH // 2, TEXTURE_HEIGHT
     
     def _resize_callback(self) -> None:
         """Handle window resize events."""
@@ -123,9 +147,10 @@ class UI:
             viewport_height = dpg.get_viewport_client_height()
             dpg.configure_item("main_window", width=viewport_width, height=viewport_height)
             
-            # Update image display size
+            # Update image display sizes for both images
             display_width, display_height = self._get_image_display_size()
-            dpg.configure_item("image_display", width=display_width, height=display_height)
+            dpg.configure_item("original_image_display", width=display_width, height=display_height)
+            dpg.configure_item("styled_image_display", width=display_width, height=display_height)
         except Exception:
             pass
     
@@ -158,15 +183,30 @@ class UI:
         """
         self.snapshot_callback = callback
     
+    def update_images(self, original_data: np.ndarray, styled_data: np.ndarray) -> None:
+        """Update both original and styled displayed images.
+        
+        Args:
+            original_data: Flattened RGBA image data for original image
+            styled_data: Flattened RGBA image data for styled image
+        """
+        try:
+            if dpg.does_item_exist("original_texture_id"):
+                dpg.set_value("original_texture_id", original_data)
+            if dpg.does_item_exist("styled_texture_id"):
+                dpg.set_value("styled_texture_id", styled_data)
+        except Exception as e:
+            print(f"Texture update error: {e}")
+
     def update_image(self, image_data: np.ndarray) -> None:
-        """Update the displayed image.
+        """Update the styled image display (legacy method for compatibility).
         
         Args:
             image_data: Flattened RGBA image data for display
         """
         try:
-            if dpg.does_item_exist("texture_id"):
-                dpg.set_value("texture_id", image_data)
+            if dpg.does_item_exist("styled_texture_id"):
+                dpg.set_value("styled_texture_id", image_data)
         except Exception as e:
             print(f"Texture update error: {e}")
     

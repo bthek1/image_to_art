@@ -22,6 +22,7 @@ class AIBoothApp:
         
         # Current frame storage
         self.current_frame: Optional[np.ndarray] = None
+        self.current_original_frame: Optional[np.ndarray] = None
         
         # Set up UI callbacks
         self.ui.set_style_change_callback(self._on_style_change)
@@ -50,21 +51,27 @@ class AIBoothApp:
         if not success or frame is None:
             return
         
+        # Store original frame
+        self.current_original_frame = frame
+        
         # Apply current style
         current_style = self.ui.get_current_style()
         stylized_frame = self.image_processor.stylize(frame, current_style)
         
         if stylized_frame is not None:
-            # Store current frame for snapshot capability
+            # Store current styled frame for snapshot capability
             self.current_frame = stylized_frame
             
-            # Prepare for display
-            display_data = self.image_processor.prepare_for_display(
+            # Prepare both images for display
+            original_display_data = self.image_processor.prepare_for_display(
+                frame, TEXTURE_WIDTH, TEXTURE_HEIGHT
+            )
+            styled_display_data = self.image_processor.prepare_for_display(
                 stylized_frame, TEXTURE_WIDTH, TEXTURE_HEIGHT
             )
             
-            # Update UI
-            self.ui.update_image(display_data)
+            # Update UI with both images
+            self.ui.update_images(original_display_data, styled_display_data)
     
     def run(self) -> None:
         """Run the AI Booth application."""
