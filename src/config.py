@@ -21,7 +21,7 @@ MIN_WINDOW_WIDTH: int = 1200  # Increased minimum width for two images
 MIN_WINDOW_HEIGHT: int = 600
 
 # UI configurations
-CONTROL_HEIGHT: int = 100
+CONTROL_HEIGHT: int = 180  # Increased for comprehensive stats display
 PADDING: int = 40
 ASPECT_RATIO: float = 4.0 / 3.0
 

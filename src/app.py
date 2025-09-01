@@ -1,6 +1,7 @@
 """Main application class for the AI Booth."""
 
 import numpy as np
+import time
 from typing import Optional
 from .camera import Camera
 from .image_processor import ImageProcessor
@@ -46,17 +47,26 @@ class AIBoothApp:
     
     def _process_frame(self) -> None:
         """Process a single frame from the camera."""
+        frame_start_time = time.time()
+        
         # Read frame from camera
+        camera_start_time = time.time()
         success, frame = self.camera.read_frame()
+        camera_end_time = time.time()
+        
         if not success or frame is None:
+            # Record dropped frame
+            self.ui.record_dropped_frame()
             return
         
         # Store original frame
         self.current_original_frame = frame
         
         # Apply current style
+        processing_start_time = time.time()
         current_style = self.ui.get_current_style()
         stylized_frame = self.image_processor.stylize(frame, current_style)
+        processing_end_time = time.time()
         
         if stylized_frame is not None:
             # Store current styled frame for snapshot capability
@@ -72,6 +82,18 @@ class AIBoothApp:
             
             # Update UI with both images
             self.ui.update_images(original_display_data, styled_display_data)
+            
+            # Calculate timing metrics
+            frame_end_time = time.time()
+            camera_time = camera_end_time - camera_start_time
+            processing_time = processing_end_time - processing_start_time
+            total_time = frame_end_time - frame_start_time
+            
+            # Update performance stats with timing information
+            self.ui.update_stats(processing_time, camera_time, total_time)
+        else:
+            # Record dropped frame if stylization failed
+            self.ui.record_dropped_frame()
     
     def run(self) -> None:
         """Run the AI Booth application."""

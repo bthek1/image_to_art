@@ -2,6 +2,9 @@
 
 import dearpygui.dearpygui as dpg
 import numpy as np
+import time
+import psutil
+import os
 from typing import Callable, Tuple, Optional
 from .config import (
     STYLE_NAMES, DEFAULT_STYLE, TEXTURE_WIDTH, TEXTURE_HEIGHT,
@@ -18,6 +21,25 @@ class UI:
         self.current_style = DEFAULT_STYLE
         self.style_change_callback: Optional[Callable] = None
         self.snapshot_callback: Optional[Callable] = None
+        
+        # FPS tracking
+        self.frame_times = []
+        self.last_frame_time = time.time()
+        self.fps = 0.0
+        self.frame_count = 0
+        
+        # Latency tracking
+        self.processing_latencies = []
+        self.camera_latencies = []
+        self.total_latencies = []
+        self.avg_processing_latency = 0.0
+        self.avg_camera_latency = 0.0
+        self.avg_total_latency = 0.0
+        
+        # Performance metrics
+        self.dropped_frames = 0
+        self.last_stats_update = time.time()
+        self.stats_update_interval = 0.5  # Update stats every 0.5 seconds
         
         # Initialize DearPyGUI
         dpg.create_context()
@@ -101,6 +123,34 @@ class UI:
                         height=display_height,
                         tag="styled_image_display"
                     )
+            
+            # Add stats section at the bottom
+            dpg.add_separator()
+            dpg.add_text("Performance Stats:", color=(200, 200, 200))
+            
+            # First row of stats
+            with dpg.group(horizontal=True):
+                dpg.add_text("FPS: 0.0", tag="fps_text", color=(150, 255, 150))
+                dpg.add_spacer(width=15)
+                dpg.add_text("Frames: 0", tag="frame_count_text", color=(150, 150, 255))
+                dpg.add_spacer(width=15)
+                dpg.add_text("Style: Cartoon", tag="current_style_text", color=(255, 255, 150))
+            
+            # Second row of stats - Latency metrics
+            with dpg.group(horizontal=True):
+                dpg.add_text("Total Latency: 0.0ms", tag="total_latency_text", color=(255, 150, 150))
+                dpg.add_spacer(width=15)
+                dpg.add_text("Processing: 0.0ms", tag="processing_latency_text", color=(255, 200, 100))
+                dpg.add_spacer(width=15)
+                dpg.add_text("Camera: 0.0ms", tag="camera_latency_text", color=(100, 255, 200))
+            
+            # Third row of stats - Additional metrics
+            with dpg.group(horizontal=True):
+                dpg.add_text("Dropped: 0", tag="dropped_frames_text", color=(255, 100, 100))
+                dpg.add_spacer(width=15)
+                dpg.add_text("CPU Load: 0%", tag="cpu_load_text", color=(200, 150, 255))
+                dpg.add_spacer(width=15)
+                dpg.add_text("Mem: 0MB", tag="memory_text", color=(150, 255, 200))
         
         # Set as primary window
         dpg.set_primary_window("main_window", True)
@@ -159,6 +209,13 @@ class UI:
         self.current_style = app_data
         print(f"Style changed to: {self.current_style}")
         
+        # Update the stats display immediately
+        try:
+            if dpg.does_item_exist("current_style_text"):
+                dpg.set_value("current_style_text", f"Style: {self.current_style}")
+        except Exception:
+            pass
+        
         if self.style_change_callback:
             self.style_change_callback(app_data)
     
@@ -209,6 +266,131 @@ class UI:
                 dpg.set_value("styled_texture_id", image_data)
         except Exception as e:
             print(f"Texture update error: {e}")
+    
+    def _update_fps(self) -> None:
+        """Update FPS calculation and display."""
+        current_time = time.time()
+        frame_time = current_time - self.last_frame_time
+        self.last_frame_time = current_time
+        
+        # Keep a rolling window of frame times (last 30 frames)
+        self.frame_times.append(frame_time)
+        if len(self.frame_times) > 30:
+            self.frame_times.pop(0)
+        
+        # Calculate average FPS
+        if self.frame_times:
+            avg_frame_time = sum(self.frame_times) / len(self.frame_times)
+            self.fps = 1.0 / avg_frame_time if avg_frame_time > 0 else 0.0
+        
+        self.frame_count += 1
+    
+    def _update_latency(self, processing_time: float, camera_time: float, total_time: float) -> None:
+        """Update latency calculations.
+        
+        Args:
+            processing_time: Time spent on image processing in seconds
+            camera_time: Time spent on camera operations in seconds  
+            total_time: Total frame processing time in seconds
+        """
+        # Convert to milliseconds
+        processing_ms = processing_time * 1000
+        camera_ms = camera_time * 1000
+        total_ms = total_time * 1000
+        
+        # Keep a rolling window of latencies (last 30 measurements)
+        self.processing_latencies.append(processing_ms)
+        if len(self.processing_latencies) > 30:
+            self.processing_latencies.pop(0)
+            
+        self.camera_latencies.append(camera_ms)
+        if len(self.camera_latencies) > 30:
+            self.camera_latencies.pop(0)
+            
+        self.total_latencies.append(total_ms)
+        if len(self.total_latencies) > 30:
+            self.total_latencies.pop(0)
+        
+        # Calculate averages
+        if self.processing_latencies:
+            self.avg_processing_latency = sum(self.processing_latencies) / len(self.processing_latencies)
+        if self.camera_latencies:
+            self.avg_camera_latency = sum(self.camera_latencies) / len(self.camera_latencies)
+        if self.total_latencies:
+            self.avg_total_latency = sum(self.total_latencies) / len(self.total_latencies)
+    
+    def _get_system_stats(self) -> Tuple[float, float]:
+        """Get system CPU and memory statistics.
+        
+        Returns:
+            Tuple of (cpu_percent, memory_mb)
+        """
+        try:
+            # Get CPU usage for current process
+            process = psutil.Process(os.getpid())
+            cpu_percent = process.cpu_percent()
+            
+            # Get memory usage for current process in MB
+            memory_info = process.memory_info()
+            memory_mb = memory_info.rss / (1024 * 1024)
+            
+            return cpu_percent, memory_mb
+        except Exception:
+            return 0.0, 0.0
+    
+    def update_stats(self, processing_time: float = 0.0, camera_time: float = 0.0, total_time: float = 0.0) -> None:
+        """Update the performance stats display.
+        
+        Args:
+            processing_time: Time spent on image processing in seconds
+            camera_time: Time spent on camera operations in seconds
+            total_time: Total frame processing time in seconds
+        """
+        self._update_fps()
+        
+        # Update latency if provided
+        if total_time > 0:
+            self._update_latency(processing_time, camera_time, total_time)
+        
+        # Only update UI elements periodically to avoid excessive UI updates
+        current_time = time.time()
+        if current_time - self.last_stats_update >= self.stats_update_interval:
+            self.last_stats_update = current_time
+            
+            # Get system stats
+            cpu_percent, memory_mb = self._get_system_stats()
+            
+            try:
+                # First row stats
+                if dpg.does_item_exist("fps_text"):
+                    dpg.set_value("fps_text", f"FPS: {self.fps:.1f}")
+                if dpg.does_item_exist("frame_count_text"):
+                    dpg.set_value("frame_count_text", f"Frames: {self.frame_count}")
+                if dpg.does_item_exist("current_style_text"):
+                    dpg.set_value("current_style_text", f"Style: {self.current_style}")
+                
+                # Second row - Latency stats
+                if dpg.does_item_exist("total_latency_text"):
+                    dpg.set_value("total_latency_text", f"Total Latency: {self.avg_total_latency:.1f}ms")
+                if dpg.does_item_exist("processing_latency_text"):
+                    dpg.set_value("processing_latency_text", f"Processing: {self.avg_processing_latency:.1f}ms")
+                if dpg.does_item_exist("camera_latency_text"):
+                    dpg.set_value("camera_latency_text", f"Camera: {self.avg_camera_latency:.1f}ms")
+                
+                # Third row - System stats
+                if dpg.does_item_exist("dropped_frames_text"):
+                    dpg.set_value("dropped_frames_text", f"Dropped: {self.dropped_frames}")
+                if dpg.does_item_exist("cpu_load_text"):
+                    dpg.set_value("cpu_load_text", f"CPU Load: {cpu_percent:.1f}%")
+                if dpg.does_item_exist("memory_text"):
+                    dpg.set_value("memory_text", f"Mem: {memory_mb:.1f}MB")
+                    
+            except Exception as e:
+                print(f"Stats update error: {e}")
+    
+    def record_dropped_frame(self) -> None:
+        """Record a dropped frame for statistics."""
+        self.dropped_frames += 1
     
     def get_current_style(self) -> str:
         """Get the currently selected style.

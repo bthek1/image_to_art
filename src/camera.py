@@ -18,6 +18,37 @@ class Camera:
         self.cap: Optional[cv.VideoCapture] = None
         self.is_opened = False
         
+    def _try_camera_indices(self, indices: list) -> bool:
+        """Try to open camera using different indices.
+        
+        Args:
+            indices: List of camera indices to try
+            
+        Returns:
+            True if any camera opened successfully, False otherwise
+        """
+        for idx in indices:
+            try:
+                print(f"Trying camera index {idx}...")
+                cap = cv.VideoCapture(idx)
+                if cap.isOpened():
+                    # Test if we can actually read a frame
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        print(f"Successfully opened camera index {idx}")
+                        self.cap = cap
+                        self.camera_index = idx
+                        self.is_opened = True
+                        return True
+                    else:
+                        cap.release()
+                else:
+                    cap.release()
+            except Exception as e:
+                print(f"Failed to open camera index {idx}: {e}")
+                continue
+        return False
+        
     def open(self) -> bool:
         """Open the camera connection.
         
@@ -25,9 +56,15 @@ class Camera:
             True if camera opened successfully, False otherwise
         """
         try:
-            self.cap = cv.VideoCapture(self.camera_index)
-            self.is_opened = self.cap.isOpened()
-            return self.is_opened
+            # Try the specified index first, then fall back to common indices
+            indices_to_try = [self.camera_index]
+            
+            # Add other common camera indices if not already in list
+            for idx in [0, 1, 2, 3]:
+                if idx not in indices_to_try:
+                    indices_to_try.append(idx)
+            
+            return self._try_camera_indices(indices_to_try)
         except Exception as e:
             print(f"Error opening camera: {e}")
             return False
