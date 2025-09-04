@@ -19,7 +19,9 @@ class AIBoothApp:
         self.camera = Camera(CAMERA_INDEX)
         self.image_processor = ImageProcessor()
         self.file_manager = FileManager(SAVE_DIR)
-        self.ui = UI()
+        
+        # Initialize UI with available styles from image processor
+        self.ui = UI(available_styles=self.image_processor.supported_styles)
         
         # Current frame storage
         self.current_frame: Optional[np.ndarray] = None

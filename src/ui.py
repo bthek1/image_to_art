@@ -16,9 +16,14 @@ from .config import (
 class UI:
     """Handles the user interface using DearPyGUI."""
     
-    def __init__(self):
-        """Initialize the UI."""
-        self.current_style = DEFAULT_STYLE
+    def __init__(self, available_styles: Optional[list] = None):
+        """Initialize the UI.
+        
+        Args:
+            available_styles: List of available styles, defaults to STYLE_NAMES from config
+        """
+        self.available_styles = available_styles or STYLE_NAMES
+        self.current_style = self.available_styles[0] if self.available_styles else DEFAULT_STYLE
         self.style_change_callback: Optional[Callable] = None
         self.snapshot_callback: Optional[Callable] = None
         
@@ -91,7 +96,7 @@ class UI:
         ):
             dpg.add_text("Pick a style")
             dpg.add_combo(
-                STYLE_NAMES,
+                self.available_styles,
                 default_value=self.current_style,
                 callback=self._on_style_change,
                 tag="style_combo"
